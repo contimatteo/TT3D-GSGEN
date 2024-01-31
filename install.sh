@@ -1,8 +1,8 @@
 #!/bin/bash
 
 pip install -U pip wheel setuptools
-pip install torch torchvision torchaudio torchmetrics --index-url https://download.pytorch.org/whl/cu118
-pip install ninja torchtyping
+pip install torch==2.0.1 torchaudio==2.0.2 torchvision==0.15.2 --index-url https://download.pytorch.org/whl/cu118
+pip install ninja torchtyping==0.1.4
 pip install \
   accelerate==0.21.0 \
   einops==0.6.1 \
