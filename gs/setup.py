@@ -8,7 +8,7 @@ _src_path = os.path.dirname(os.path.abspath(__file__))
 
 nvcc_flags = [
     "-O3",
-    "-std=c++17",  # "-std=c++14",
+    "-std=c++14",
     # "-G",
     # "-g",
     # "-lineinfo",
@@ -40,7 +40,7 @@ else:
     pass
 
 if os.name == "posix":
-    c_flags = ["-O3", "-std=c++17", "-g"]  # ["-O3", "-std=c++14", "-g"]
+    c_flags = ["-O3", "-std=c++14", "-g"]
 elif os.name == "nt":
     nvcc_flags.append("-DWIN32_LEAN_AND_MEAN")
     c_flags = ["/O2", "/std:c++17"]

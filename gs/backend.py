@@ -7,7 +7,7 @@ _src_path = os.path.dirname(os.path.abspath(__file__))
 
 nvcc_flags = [
     "-O3",
-    "-std=c++17",  # "-std=c++14",
+    "-std=c++14",
     "-U__CUDA_NO_HALF_OPERATORS__",
     "-U__CUDA_NO_HALF_CONVERSIONS__",
     "-U__CUDA_NO_HALF2_OPERATORS__",
@@ -16,7 +16,7 @@ nvcc_flags = [
 include_dirs = torch.utils.cpp_extension.include_paths()
 
 if os.name == "posix":
-    c_flags = ["-O3", "-std=c++17"]  # ["-O3", "-std=c++14"]
+    c_flags = ["-O3", "-std=c++14"]
 elif os.name == "nt":
     c_flags = ["/O2", "/std:c++17"]
 
