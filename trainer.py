@@ -60,6 +60,7 @@ def convert_to_image(outs):
 
 
 class Trainer(nn.Module):
+
     def __init__(self, cfg):
         super().__init__()
 
@@ -86,13 +87,11 @@ class Trainer(nn.Module):
         else:
             huggingface_online()
 
-        prompt = (
-            self.cfg.prompt.prompt.strip().replace(" ", "_").lower()[:64]
-        )  # length limited by wandb
+        prompt = (self.cfg.prompt.prompt.strip().replace(" ", "_").lower()[:64])  # length limited by wandb
         day_timestamp = datetime.datetime.now().strftime("%Y-%m-%d")
         hms_timestamp = datetime.datetime.now().strftime("%H%M%S")
         timestamp = f"{hms_timestamp}|{day_timestamp}"
-        num_runs = get_num_runs("gsgen")
+        num_runs = get_num_runs(wandb_enabled=cfg.wandb, project_name="gsgen")
         uid = f"{num_runs}|{timestamp}|{prompt}"
         tags = [day_timestamp, prompt, self.cfg.guidance.type, self.mode]
         notes = self.cfg.notes
@@ -118,14 +117,11 @@ class Trainer(nn.Module):
                 shuffle=False,
                 collate_fn=self.dataset.collate,
                 num_workers=0,
-            )
-        )
+            ))
 
         if self.mode == "image_to_3d":
             assert "image" in self.cfg, "image should be provided in image_to_3d mode"
-            assert (
-                self.depth_estimator is not None
-            ), "depth estimator should be provided"
+            assert (self.depth_estimator is not None), "depth estimator should be provided"
             image = Path(self.cfg.image)
             assert image.exists(), f"{image} not exists"
             image = Image.open(image)
@@ -138,12 +134,10 @@ class Trainer(nn.Module):
             # NOTE: I found this important
             # TODO: validate this is correct way to normalize depth
             self.depth_map = (
-                (self.depth_map - self.depth_map[0][self.mask].mean())
-                * self.cfg.get("depth_scale", 100.0)
+                (self.depth_map - self.depth_map[0][self.mask].mean()) * self.cfg.get("depth_scale", 100.0)
                 # * self.dataset.get_reso
                 # / 256
-                + self.dataset.original_camera_distance
-            )
+                + self.dataset.original_camera_distance)
             initial_values = initialize(
                 cfg.init,
                 image=self.image,
@@ -157,23 +151,17 @@ class Trainer(nn.Module):
         elif self.mode == "text_to_3d":
             initial_values = initialize(cfg.init)
         # initial_values = base_initialize(cfg.init)
-        self.renderer = GaussianSplattingRenderer(
-            cfg.renderer, initial_values=initial_values
-        ).to(cfg.device)
+        self.renderer = GaussianSplattingRenderer(cfg.renderer, initial_values=initial_values).to(cfg.device)
         self.renderer.setup_lr(cfg.lr)
         self.renderer.set_optimizer(cfg.optimizer)
 
         if self.cfg.auxiliary.enabled:
             self.aux_guidance = get_guidance(cfg.auxiliary)
-            self.aux_guidance.set_text(
-                self.cfg.auxiliary.get("prompt", self.cfg.prompt.prompt)
-            )
+            self.aux_guidance.set_text(self.cfg.auxiliary.get("prompt", self.cfg.prompt.prompt))
 
         self.guidance = get_guidance(cfg.guidance)
         if self.cfg.guidance.get("keep_complete_pipeline", False):
-            self.prompt_processor = get_prompt_processor(
-                cfg.prompt, guidance_model=self.guidance
-            )
+            self.prompt_processor = get_prompt_processor(cfg.prompt, guidance_model=self.guidance)
         else:
             self.prompt_processor = get_prompt_processor(cfg.prompt)
 
@@ -240,9 +228,7 @@ class Trainer(nn.Module):
             cfg.update(override_cfg)
 
         trainer = cls(cfg)
-        trainer.renderer = GaussianSplattingRenderer.load(
-            cfg.renderer, ckpt["params"]
-        ).to(cfg.device)
+        trainer.renderer = GaussianSplattingRenderer.load(cfg.renderer, ckpt["params"]).to(cfg.device)
 
         trainer.renderer.setup_lr(cfg.lr)
         trainer.renderer.set_optimizer(cfg.optimizer)
@@ -304,10 +290,7 @@ class Trainer(nn.Module):
         )
         loss = 0.0
         if "loss_sds" in guidance_out.keys():
-            loss += (
-                C(self.cfg.loss.sds, self.step, self.max_steps)
-                * guidance_out["loss_sds"]
-            )
+            loss += (C(self.cfg.loss.sds, self.step, self.max_steps) * guidance_out["loss_sds"])
             self.writer.add_scalar(
                 "loss_weights/sds",
                 C(self.cfg.loss.sds, self.step, self.max_steps),
@@ -317,10 +300,7 @@ class Trainer(nn.Module):
             self.writer.add_scalar("loss/sds", guidance_out["loss_sds"], self.step)
 
         if "loss_vsd" in guidance_out.keys():
-            loss += (
-                C(self.cfg.loss.vsd, self.step, self.max_steps)
-                * guidance_out["loss_vsd"]
-            )
+            loss += (C(self.cfg.loss.vsd, self.step, self.max_steps) * guidance_out["loss_vsd"])
             self.writer.add_scalar(
                 "loss_weights/vsd",
                 C(self.cfg.loss.vsd, self.step, self.max_steps),
@@ -330,10 +310,7 @@ class Trainer(nn.Module):
             self.writer.add_scalar("loss/vsd", guidance_out["loss_vsd"], self.step)
 
         if "loss_lora" in guidance_out.keys():
-            loss += (
-                C(self.cfg.loss.lora, self.step, self.max_steps)
-                * guidance_out["loss_lora"]
-            )
+            loss += (C(self.cfg.loss.lora, self.step, self.max_steps) * guidance_out["loss_lora"])
             self.writer.add_scalar(
                 "loss_weights/lora",
                 C(self.cfg.loss.lora, self.step, self.max_steps),
@@ -343,10 +320,8 @@ class Trainer(nn.Module):
             self.writer.add_scalar("loss/lora", guidance_out["loss_lora"], self.step)
 
         if self.cfg.loss.sparsity > 0.0:
-            assert (
-                "opacity" in out
-            ), "opacity not in output, should turn off the `rgb_only` flag"
-            sparsity_loss = (out["opacity"] ** 2 + 0.01).sqrt().mean()
+            assert ("opacity" in out), "opacity not in output, should turn off the `rgb_only` flag"
+            sparsity_loss = (out["opacity"]**2 + 0.01).sqrt().mean()
             self.writer.add_scalar("loss/sparsity", sparsity_loss, self.step)
             loss += C(self.cfg.loss.sparsity, self.step, self.max_steps) * sparsity_loss
             self.writer.add_scalar(
@@ -355,9 +330,7 @@ class Trainer(nn.Module):
             )
 
         if self.cfg.loss.opague > 0.0:
-            assert (
-                "opacity" in out
-            ), "opacity not in output, should turn off the `rgb_only` flag"
+            assert ("opacity" in out), "opacity not in output, should turn off the `rgb_only` flag"
             opacity_clamped = out["opacity"].clamp(1e-3, 1.0 - 1e-3)
             opacity_loss = binary_cross_entropy(opacity_clamped, opacity_clamped)
             self.writer.add_scalar("loss/opague", opacity_loss, self.step)
@@ -368,18 +341,12 @@ class Trainer(nn.Module):
             )
 
         if self.cfg.loss.z_var > 0:
-            assert (
-                "z_var" in out
-            ), "z_var not in output, should turn on the `z_var` flag"
+            assert ("z_var" in out), "z_var not in output, should turn on the `z_var` flag"
             opacity_clamped = out["opacity"].clamp(1e-3, 1.0 - 1e-3)
-            z_var_loss = (
-                out["z_var"] / opacity_clamped * (opacity_clamped > 0.5)
-            ).mean()
+            z_var_loss = (out["z_var"] / opacity_clamped * (opacity_clamped > 0.5)).mean()
             self.writer.add_scalar("loss/z_var", z_var_loss, self.step)
             loss += C(self.cfg.loss.z_var, self.step, self.max_steps) * z_var_loss
-            self.writer.add_scalar(
-                "loss_weights/z_var", C(self.cfg.loss.z_var, self.step, self.max_steps)
-            )
+            self.writer.add_scalar("loss_weights/z_var", C(self.cfg.loss.z_var, self.step, self.max_steps))
 
         self.writer.add_scalar("loss/total", loss, self.step)
 
@@ -402,21 +369,12 @@ class Trainer(nn.Module):
                     out["opacity"] = apply_float_colormap(out["opacity"])
 
                 if "z_var" in out.keys():
-                    out["z_var"] = (
-                        out["z_var"] / out["opacity"] * (out["opacity"] > 0.5)
-                    )
-                    out["z_var"] = apply_float_colormap(
-                        out["z_var"] / out["z_var"].max()
-                    )
+                    out["z_var"] = (out["z_var"] / out["opacity"] * (out["opacity"] > 0.5))
+                    out["z_var"] = apply_float_colormap(out["z_var"] / out["z_var"].max())
 
-                final = (
-                    torch.cat(list(out.values()), dim=-2).clamp(0, 1).cpu().numpy()
-                    * 255.0
-                ).astype(np.uint8)[-1]
+                final = (torch.cat(list(out.values()), dim=-2).clamp(0, 1).cpu().numpy() * 255.0).astype(np.uint8)[-1]
                 imageio.imwrite(str(train_image_pth / f"{self.step}.png"), final)
-                self.writer.add_image(
-                    "train/image", final, self.step, dataformats="HWC"
-                )
+                self.writer.add_image("train/image", final, self.step, dataformats="HWC")
 
         # return loss.item()
         return loss.item()
@@ -425,33 +383,22 @@ class Trainer(nn.Module):
         loss = 0.0
         if self.cfg.estimators.depth.enabled:
             depth_estimated = self.depth_estimator(out["rgb"])
-            assert (
-                "depth" in out.keys()
-            ), "depth should be rendered when using depth estimator loss"
+            assert ("depth" in out.keys()), "depth should be rendered when using depth estimator loss"
             # should add a mask here to filter out the background
-            depth_estimate_loss = depth_loss(
-                self.pearson, depth_estimated, out["depth"]
-            )
+            depth_estimate_loss = depth_loss(self.pearson, depth_estimated, out["depth"])
             self.writer.add_scalar("loss/depth", depth_estimate_loss, self.step)
-            depth_loss_weight = C(
-                self.cfg.estimators.depth.value, self.step, self.max_steps
-            )
+            depth_loss_weight = C(self.cfg.estimators.depth.value, self.step, self.max_steps)
             self.writer.add_scalar("loss_weights/depth", depth_loss_weight, self.step)
             loss += depth_loss_weight * depth_estimate_loss
 
         if self.cfg.estimators.normal.enabled:
             normal_estimated = self.normal_estimator(out["rgb"])
 
-            assert (
-                "normal" in out.keys()
-            ), "normal should be rendered when using normal estimator loss"
+            assert ("normal" in out.keys()), "normal should be rendered when using normal estimator loss"
             normal_estimator_loss = F.mse_loss(out["normal"], normal_estimated)
             self.writer.add_scalar("estimator_loss/normal", normal_estimator_loss)
 
-            loss += (
-                C(self.cfg.estimators.normal.value, self.step, self.max_steps)
-                * normal_estimator_loss
-            )
+            loss += (C(self.cfg.estimators.normal.value, self.step, self.max_steps) * normal_estimator_loss)
 
         return loss
 
@@ -459,10 +406,7 @@ class Trainer(nn.Module):
         if self.cfg.auxiliary.enabled:
             aux_guidance_loss = self.aux_guidance(self.renderer)
             self.writer.add_scalar("loss/aux_guidance", aux_guidance_loss, self.step)
-            loss = (
-                C(self.cfg.loss.aux_guidance, self.step, self.max_steps)
-                * aux_guidance_loss
-            )
+            loss = (C(self.cfg.loss.aux_guidance, self.step, self.max_steps) * aux_guidance_loss)
             loss.backward()
 
     def auxiliary_loss_step(self):
@@ -495,9 +439,7 @@ class Trainer(nn.Module):
         eval_upsample = self.cfg.get("eval_upsample", 1)
         camera_info.upsample(eval_upsample)
 
-        out = self.renderer.render_one(
-            c2w, camera_info, use_bg=self.cfg.use_bg, rgb_only=self.cfg.rgb_only
-        )
+        out = self.renderer.render_one(c2w, camera_info, use_bg=self.cfg.use_bg, rgb_only=self.cfg.rgb_only)
         out = dict_to_device(out, "cpu")
         if "depth" in out.keys():
             assert "opacity" in out.keys()
@@ -508,9 +450,7 @@ class Trainer(nn.Module):
             out["z_var"] = out["z_var"] / out["opacity"] * (out["opacity"] > 0.5)
             out["z_var"] = apply_float_colormap(out["z_var"] / out["z_var"].max())
 
-        final = (torch.cat(list(out.values()), dim=-2).cpu().numpy() * 255.0).astype(
-            np.uint8
-        )
+        final = (torch.cat(list(out.values()), dim=-2).cpu().numpy() * 255.0).astype(np.uint8)
         imageio.imwrite(str(eval_image_path / f"{self.step}.png"), final)
         self.writer.add_image("eval/image", final, self.step, dataformats="HWC")
 
@@ -541,9 +481,7 @@ class Trainer(nn.Module):
             use_bg == False
         with torch.no_grad():
             for c2w in c2ws:
-                out = self.renderer.render_one(
-                    c2w, camera_info, use_bg=use_bg, rgb_only=self.cfg.rgb_only
-                )
+                out = self.renderer.render_one(c2w, camera_info, use_bg=use_bg, rgb_only=self.cfg.rgb_only)
                 outs.append(dict_to_device(out, "cpu"))
 
         outs = stack_dicts(outs)
@@ -642,16 +580,10 @@ class Trainer(nn.Module):
         bs = self.cfg.batch_size
         # sds_loss
         if "loss_sds" in guidance_out.keys():
-            loss += (
-                C(self.cfg.loss.sds, self.step, self.max_steps)
-                * guidance_out["loss_sds"]
-            )
+            loss += (C(self.cfg.loss.sds, self.step, self.max_steps) * guidance_out["loss_sds"])
             self.writer.add_scalar("loss/sds", guidance_out["loss_sds"], self.step)
         elif "loss_clip" in guidance_out.keys():
-            loss += (
-                C(self.cfg.loss.clip, self.step, self.max_steps)
-                * guidance_out["loss_clip"]
-            )
+            loss += (C(self.cfg.loss.clip, self.step, self.max_steps) * guidance_out["loss_clip"])
             self.writer.add_scalar("loss/clip", guidance_out["loss_clip"], self.step)
         else:
             raise ValueError("No guidance loss is provided")
@@ -689,9 +621,9 @@ class Trainer(nn.Module):
             self.writer.add_scalar("loss/depth", depth_loss_val, self.step)
 
         if num_original_views < bs:
-            loss += self.guidance.get_normal_clip_loss(
-                out["rgb"][~is_original_view_mask], self.image, self.text_prompt
-            ) * C(self.cfg.loss.ref, self.step, self.max_steps)
+            loss += self.guidance.get_normal_clip_loss(out["rgb"][~is_original_view_mask],
+                                                       self.image, self.text_prompt) * C(
+                                                           self.cfg.loss.ref, self.step, self.max_steps)
 
         self.writer.add_scalar("loss/total", loss, self.step)
 
@@ -714,21 +646,12 @@ class Trainer(nn.Module):
                     out["opacity"] = apply_float_colormap(out["opacity"])
 
                 if "z_var" in out.keys():
-                    out["z_var"] = (
-                        out["z_var"] / out["opacity"] * (out["opacity"] > 0.5)
-                    )
-                    out["z_var"] = apply_float_colormap(
-                        out["z_var"] / out["z_var"].max()
-                    )
+                    out["z_var"] = (out["z_var"] / out["opacity"] * (out["opacity"] > 0.5))
+                    out["z_var"] = apply_float_colormap(out["z_var"] / out["z_var"].max())
 
-                final = (
-                    torch.cat(list(out.values()), dim=-2).clamp(0, 1).cpu().numpy()
-                    * 255.0
-                ).astype(np.uint8)[-1]
+                final = (torch.cat(list(out.values()), dim=-2).clamp(0, 1).cpu().numpy() * 255.0).astype(np.uint8)[-1]
                 imageio.imwrite(str(train_image_pth / f"{self.step}.png"), final)
-                self.writer.add_image(
-                    "train/image", final, self.step, dataformats="HWC"
-                )
+                self.writer.add_image("train/image", final, self.step, dataformats="HWC")
 
         # return loss.item()
         return loss.item()
@@ -787,9 +710,7 @@ class Trainer(nn.Module):
             cam_info.set_reso(reso)
 
         epoch = self.cfg.upsample_tune.epoch
-        console.print(
-            f"Step: {self.step}, start tuning with upsampling model for {epoch} epoch"
-        )
+        console.print(f"Step: {self.step}, start tuning with upsampling model for {epoch} epoch")
 
         self.update(self.cfg.max_steps)
         if hasattr(self.cfg.upsample_tune, "lr"):
@@ -821,16 +742,12 @@ class Trainer(nn.Module):
                             azimuth=batch["azimuth"],
                             camera_distance=batch["camera_distance"],
                         )
-                    image_gt = upsampled_images[i : i + bs].to(self.cfg.device)
+                    image_gt = upsampled_images[i:i + bs].to(self.cfg.device)
 
                     loss = 0.0
                     if self.cfg.upsample_tune.loss.sds > 0.0:
-                        loss += (
-                            self.cfg.upsample_tune.loss.sds * guidance_out["loss_sds"]
-                        )
-                    loss += self.cfg.upsample_tune.loss.rgb * self.image_loss_fn(
-                        out["rgb"], image_gt
-                    )
+                        loss += (self.cfg.upsample_tune.loss.sds * guidance_out["loss_sds"])
+                    loss += self.cfg.upsample_tune.loss.rgb * self.image_loss_fn(out["rgb"], image_gt)
 
                     self.writer.add_image(
                         "train",
