@@ -9,4 +9,4 @@ pip install opencv-python psutil matplotlib rich scipy
 pip install "git+https://github.com/openai/CLIP.git@a1d071733d7111c9c014f024669f959182114e33"
 
 cd gs
-bash build.sh
+./build.sh
