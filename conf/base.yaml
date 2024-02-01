@@ -57,7 +57,7 @@ estimators:
     value: 0.0
 log_period: 100
 save_period: 2000
-wandb: true
+wandb: false
 notes: ''
 data:
   device: ${device}
