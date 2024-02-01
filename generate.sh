@@ -1,6 +1,8 @@
-###
+#!/bin/bash
+
 
 exit 0
+
 
 CUDA_VISIBLE_DEVICES=2 python main.py \
   --config-name="base" \
